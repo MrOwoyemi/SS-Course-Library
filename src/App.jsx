@@ -30,6 +30,7 @@ const BRAND = {
   white:     "#FFFFFF",
   font: "'Montserrat'", // main site heading + body face
   tagline: "energy, passion, community",
+  homeAfterLogin: "community", // "community" or "dash"
   established: 2019,        // from the main site's "2019 / ESTABLISHED" stat
   copyrightYear: null,      // leave null to track the current year; set a number to pin it
 
@@ -2780,7 +2781,7 @@ function VideoSlot({ lesson }) {
 }
 
 /* ---------- Lesson ---------- */
-function LessonView({ lesson, progress, onWatch, onPractise, go }) {
+function LessonView({ lesson, progress, posts, onWatch, onPractise, go }) {
   const siblings = ALL_LESSONS.filter((l) => l.levelId === lesson.levelId);
   const prev = siblings[lesson.indexInLevel - 1];
   const next = siblings[lesson.indexInLevel + 1];
@@ -2859,6 +2860,22 @@ function LessonView({ lesson, progress, onWatch, onPractise, go }) {
           </section>
         </aside>
       </div>
+
+      {posts && posts.filter((x) => x.lesson === lesson.id).length > 0 && (
+        <section className="lesson-talk">
+          <h3>From the community</h3>
+          {posts.filter((x) => x.lesson === lesson.id).slice(0, 3).map((x) => (
+            <button key={x.id} className="talk-row" onClick={() => go({ type: "community" })}>
+              <span className="avatar sm" aria-hidden="true">{x.author.slice(0, 1)}</span>
+              <span>
+                <strong>{x.author}</strong>
+                {x.teacher && <span className="teacher-tag">Teacher</span>}
+                <span className="talk-body">{x.body}</span>
+              </span>
+            </button>
+          ))}
+        </section>
+      )}
 
       <div className="marking">
         <div className="mark-col">
@@ -3162,6 +3179,217 @@ function Dashboard({ progress, go }) {
   );
 }
 
+/* ---------- Community ----------
+   Sample posts so the feed is not an empty room before real members arrive.
+   Replace SEED_POSTS before launch. The thing that makes a feed worth having
+   inside the library rather than on Facebook is `lesson`: a post attaches to a
+   lesson, and that lesson then shows it. */
+const KINDS = [
+  { id: "all", label: "Everything" },
+  { id: "question", label: "Questions" },
+  { id: "clip", label: "Practice clips" },
+  { id: "social", label: "Socials" },
+  { id: "notice", label: "From the teachers" },
+];
+
+const SEED_POSTS = [
+  {
+    id: "p1", author: "Kasia", teacher: true, kind: "notice", time: "2 hours ago",
+    body: "Tuesday we are doing setenta from the top, so watch the lesson before you come and you will get twice as much out of the hour. Improvers L1, lesson 4.",
+    lesson: "cas-2-02", likes: 14, comments: [],
+  },
+  {
+    id: "p2", author: "Danny", kind: "question", time: "5 hours ago",
+    body: "Completely lost on the hand behind the back in setenta \u2014 mine ends up trapped and we have to stop. Is it a hook or a grip? Watched it four times.",
+    lesson: "cas-2-02", likes: 3,
+    comments: [
+      { author: "Kasia", teacher: true, body: "Hook, never grip. If she cannot slide out of it you are holding too tight. Come five minutes early on Tuesday and I will check it." },
+      { author: "Priya", body: "Same thing happened to me for about a month. It clicked when I stopped trying to keep hold of her hand." },
+    ],
+  },
+  {
+    id: "p3", author: "Priya", kind: "clip", time: "yesterday",
+    body: "Filmed myself doing the seven basics like the drill said. Susie Q is a disaster but the rest is getting there. Posting it because apparently that is the point.",
+    lesson: "cas-b1-01", likes: 21,
+    comments: [{ author: "Tom", body: "This is braver than anything I have done this year." }],
+  },
+  {
+    id: "p4", author: "Tom", kind: "social", time: "yesterday",
+    body: "Driving to the social on Friday and I have two spare seats. Shout if you want a lift, happy to do a detour.",
+    lesson: null, likes: 8, comments: [],
+  },
+  {
+    id: "p5", author: "Marta", kind: "question", time: "2 days ago",
+    body: "Is rumba clave actually different from son clave or am I imagining it? I can hear something is off when I clap along but I cannot work out what.",
+    lesson: "rum-02", likes: 6,
+    comments: [{ author: "Danny", body: "One stroke. Lesson 2 in Rumba spells it out, the third one moves." }],
+  },
+  {
+    id: "p6", author: "Kasia", teacher: true, kind: "notice", time: "4 days ago",
+    body: "New Afro-Cuban course is up in the library \u2014 one lesson per Orisha now instead of doubling them up. Start with 'Before you begin', it is not optional.",
+    lesson: "afr-01", likes: 19, comments: [],
+  },
+];
+
+function Community({ posts, user, onPost, onLike, onComment, go }) {
+  const [kind, setKind] = useState("all");
+  const [draft, setDraft] = useState("");
+  const [draftKind, setDraftKind] = useState("question");
+  const [draftLesson, setDraftLesson] = useState("");
+  const [openId, setOpenId] = useState(null);
+  const [reply, setReply] = useState("");
+
+  const shown = kind === "all" ? posts : posts.filter((p) => p.kind === kind);
+
+  const submit = () => {
+    if (!draft.trim()) return;
+    onPost({ body: draft.trim(), kind: draftKind, lesson: draftLesson || null });
+    setDraft(""); setDraftLesson("");
+  };
+
+  return (
+    <div className="community">
+      <section className="hero">
+        <p className="eyebrow mono">{BRAND.tagline}</p>
+        <h1 className="display fitted">
+          <Fit max={110}>the salsa solent family</Fit>
+        </h1>
+        <p className="lede wide" style={{ color: "rgba(255,255,255,0.88)" }}>
+          Ask a question, post a clip you are not proud of, or find someone to share a lift with.
+          Questions attached to a lesson show up on that lesson for everyone who comes after you.
+        </p>
+      </section>
+
+      <div className="feed-wrap">
+        <div className="feed">
+          <div className="composer">
+            <textarea
+              value={draft}
+              placeholder={`Say something, ${user && user.name ? user.name : "there"}\u2026`}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <div className="composer-row">
+              <select value={draftKind} onChange={(e) => setDraftKind(e.target.value)} aria-label="Post type">
+                {KINDS.filter((k) => k.id !== "all").map((k) => (
+                  <option key={k.id} value={k.id}>{k.label}</option>
+                ))}
+              </select>
+              <select value={draftLesson} onChange={(e) => setDraftLesson(e.target.value)} aria-label="Attach a lesson">
+                <option value="">No lesson attached</option>
+                {ALL_LESSONS.map((l) => (
+                  <option key={l.id} value={l.id}>{l.strandName} — {l.title}</option>
+                ))}
+              </select>
+              <button className="btn primary sm" onClick={submit} disabled={!draft.trim()}>Post</button>
+            </div>
+          </div>
+
+          <div className="kinds" role="tablist" aria-label="Filter the feed">
+            {KINDS.map((k) => (
+              <button
+                key={k.id}
+                role="tab"
+                aria-selected={kind === k.id}
+                className={`kind${kind === k.id ? " on" : ""}`}
+                onClick={() => setKind(k.id)}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
+
+          {shown.length === 0 && <p className="lede">Nothing here yet. Be the first.</p>}
+
+          {shown.map((post) => {
+            const l = post.lesson ? lessonById(post.lesson) : null;
+            const open = openId === post.id;
+            return (
+              <article className="post" key={post.id}>
+                <header>
+                  <span className="avatar" aria-hidden="true">{post.author.slice(0, 1)}</span>
+                  <span className="post-who">
+                    <strong>{post.author}</strong>
+                    {post.teacher && <span className="teacher-tag">Teacher</span>}
+                    <span className="post-time mono">{post.time}</span>
+                  </span>
+                </header>
+                <p className="post-body">{post.body}</p>
+                {l && (
+                  <button
+                    className="lesson-chip"
+                    style={{ borderColor: l.accent, color: l.accent }}
+                    onClick={() => go({ type: "lesson", id: l.id })}
+                  >
+                    {l.strandName} · {l.title}
+                  </button>
+                )}
+                <footer>
+                  <button className={`react${post.liked ? " on" : ""}`} onClick={() => onLike(post.id)}>
+                    ♥ {post.likes}
+                  </button>
+                  <button className="react" onClick={() => { setOpenId(open ? null : post.id); setReply(""); }}>
+                    {post.comments.length} {post.comments.length === 1 ? "reply" : "replies"}
+                  </button>
+                </footer>
+                {open && (
+                  <div className="thread">
+                    {post.comments.map((c, i) => (
+                      <div className="comment" key={i}>
+                        <strong>{c.author}</strong>
+                        {c.teacher && <span className="teacher-tag">Teacher</span>}
+                        <p>{c.body}</p>
+                      </div>
+                    ))}
+                    <div className="reply">
+                      <input
+                        value={reply}
+                        placeholder="Write a reply"
+                        onChange={(e) => setReply(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && reply.trim()) { onComment(post.id, reply.trim()); setReply(""); }
+                        }}
+                      />
+                      <button
+                        className="btn sm"
+                        onClick={() => { if (reply.trim()) { onComment(post.id, reply.trim()); setReply(""); } }}
+                      >
+                        Reply
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+
+        <aside className="feed-side">
+          <section className="side-card">
+            <h3>Straight to the library</h3>
+            <p>Every course, every figure, in the order we teach it.</p>
+            <button className="btn sm" onClick={() => go({ type: "dash" })}>Open the library</button>
+          </section>
+          <section className="side-card">
+            <h3>Posting here</h3>
+            <ul className="side-list">
+              <li>Attach a lesson and your question stays with it for the next person</li>
+              <li>Clips of things going wrong are more useful than clips of things going right</li>
+              <li>Teachers read this, but class is still the place for a proper answer</li>
+            </ul>
+          </section>
+          <section className="side-card muted">
+            <h3>Prototype</h3>
+            <p>
+              The posts above are sample content. Replace SEED_POSTS before launch, and read the
+              moderation note in the README.
+            </p>
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Glossary ---------- */
 function Glossary() {
   return (
@@ -3246,17 +3474,34 @@ function saveStore(data) {
 
 export default function App() {
   const [user, setUser] = useState(() => loadStore().user || null);
-  const [view, setView] = useState({ type: "dash" });
+  const [view, setView] = useState({ type: BRAND.homeAfterLogin });
+  const [posts, setPosts] = useState(() => loadStore().posts || SEED_POSTS);
   const [progress, setProgress] = useState(() => loadStore().progress || {});
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [publicView, setPublicView] = useState("landing");
 
   useEffect(() => {
-    saveStore({ user, progress });
-  }, [user, progress]);
+    saveStore({ user, progress, posts });
+  }, [user, progress, posts]);
 
   const go = (v) => { setView(v); setSearching(false); setQuery(""); window.scrollTo(0, 0); };
+  const home = () => go({ type: BRAND.homeAfterLogin });
+  const onPost = ({ body, kind, lesson }) =>
+    setPosts((ps) => [
+      { id: "p" + Date.now(), author: (user && user.name) || "You", kind, time: "just now",
+        body, lesson, likes: 0, comments: [] },
+      ...ps,
+    ]);
+  const onLike = (id) =>
+    setPosts((ps) => ps.map((p) =>
+      p.id === id ? { ...p, liked: !p.liked, likes: p.likes + (p.liked ? -1 : 1) } : p));
+  const onComment = (id, body) =>
+    setPosts((ps) => ps.map((p) =>
+      p.id === id
+        ? { ...p, comments: [...p.comments, { author: (user && user.name) || "You", body }] }
+        : p));
+
   const onWatch = (id) =>
     setProgress((p) => ({ ...p, [id]: { ...(p[id] || {}), watched: !(p[id] && p[id].watched) } }));
 
@@ -3303,7 +3548,7 @@ export default function App() {
       {styles}
       <header className="topbar">
         <div className="bar-inner">
-          <button className="wordmark" onClick={() => go({ type: "dash" })}>
+          <button className="wordmark" onClick={home}>
             {BRAND.logo ? <span className="logomark" role="img" aria-label="Salsa Solent Dance Academy" /> : <span className="wm-1">Salsa Solent</span>}
             <span className="wm-2">{BRAND.tagline}</span>
           </button>
@@ -3336,6 +3581,21 @@ export default function App() {
 
       <nav className="strandnav">
         <div className="bar-inner nav-inner">
+          <button
+            className={`snav lead${view.type === "community" ? " on" : ""}`}
+            style={{ borderColor: view.type === "community" ? BRAND.orange : "transparent" }}
+            onClick={() => go({ type: "community" })}
+          >
+            Community
+          </button>
+          <button
+            className={`snav lead${view.type === "dash" ? " on" : ""}`}
+            style={{ borderColor: view.type === "dash" ? BRAND.orange : "transparent" }}
+            onClick={() => go({ type: "dash" })}
+          >
+            Library
+          </button>
+          <span className="nav-sep" aria-hidden="true" />
           {CURRICULUM.map((s) => (
             <button
               key={s.id}
@@ -3351,9 +3611,12 @@ export default function App() {
       </nav>
 
       <main>
+        {view.type === "community" && (
+          <Community posts={posts} user={user} onPost={onPost} onLike={onLike} onComment={onComment} go={go} />
+        )}
         {view.type === "dash" && <Dashboard progress={progress} go={go} />}
         {strand && <StrandView key={strand.id} strand={strand} progress={progress} go={go} />}
-        {lesson && <LessonView lesson={lesson} progress={progress} onWatch={onWatch} onPractise={onPractise} go={go} />}
+        {lesson && <LessonView lesson={lesson} progress={progress} posts={posts} onWatch={onWatch} onPractise={onPractise} go={go} />}
         {view.type === "glossary" && <Glossary />}
         {view.type === "search" && <Results query={query} go={go} />}
       </main>
@@ -3660,6 +3923,70 @@ main { max-width: var(--wrap); margin: 0 auto; padding: 52px 24px 84px; }
 .revisit .lesson-row:hover { background: var(--white); }
 .revisit .mono.small { margin: 14px 0 0; }
 
+/* community */
+.nav-sep { width: 1px; height: 20px; background: var(--rule); margin: 0 10px; align-self: center; flex: 0 0 auto; }
+.snav.lead { color: var(--navy); }
+.feed-wrap { display: grid; grid-template-columns: 1fr 300px; gap: 40px; align-items: start; }
+.composer { background: var(--surface); border: 1px solid var(--rule); border-top: 3px solid var(--orange); padding: 18px; margin-bottom: 24px; }
+.composer textarea { width: 100%; min-height: 86px; resize: vertical; background: var(--white);
+  border: 1px solid var(--rule); border-radius: 3px; padding: 12px 14px; font-family: var(--f);
+  font-size: 15px; color: var(--text); }
+.composer textarea:focus { outline: 2px solid var(--orange); outline-offset: 1px; }
+.composer-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.composer select { flex: 1; min-width: 150px; background: var(--white); border: 1px solid var(--rule);
+  border-radius: 3px; padding: 9px 11px; font-family: var(--f); font-size: 13px; color: var(--text); }
+.composer .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+.kinds { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--rule); margin-bottom: 8px; }
+.kind { background: none; border: 0; border-bottom: 3px solid transparent; padding: 11px 14px; cursor: pointer;
+  font-family: var(--f); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--dim); white-space: nowrap; }
+.kind:hover { color: var(--navy); }
+.kind.on { color: var(--navy); border-bottom-color: var(--orange); }
+
+.post { border-bottom: 1px solid var(--rule); padding: 22px 0; }
+.post header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--navy); color: var(--white);
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex: 0 0 auto; }
+.avatar.sm { width: 28px; height: 28px; font-size: 12px; }
+.post-who { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 15px; }
+.post-who strong { color: var(--navy); }
+.teacher-tag { background: var(--orange); color: var(--white); font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.12em; padding: 3px 7px; border-radius: 2px; }
+.post-time { font-size: 11px; color: var(--dim); }
+.post-body { margin: 0 0 14px; font-size: 15.5px; line-height: 1.7; }
+.lesson-chip { background: none; border: 1px solid; border-radius: 3px; padding: 6px 11px; cursor: pointer;
+  font-family: var(--f); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.lesson-chip:hover { background: var(--surface); }
+.post footer { display: flex; gap: 18px; margin-top: 14px; }
+.react { background: none; border: 0; padding: 0; cursor: pointer; font-family: var(--f); font-size: 13px;
+  font-weight: 600; color: var(--dim); }
+.react:hover, .react.on { color: var(--orange); }
+.thread { margin-top: 16px; padding-left: 20px; border-left: 2px solid var(--rule); }
+.comment { margin-bottom: 14px; font-size: 14.5px; }
+.comment strong { color: var(--navy); margin-right: 8px; }
+.comment p { margin: 4px 0 0; line-height: 1.65; }
+.reply { display: flex; gap: 8px; margin-top: 12px; }
+.reply input { flex: 1; background: var(--white); border: 1px solid var(--rule); border-radius: 3px;
+  padding: 9px 12px; font-family: var(--f); font-size: 14px; color: var(--text); }
+.reply input:focus { outline: 2px solid var(--orange); outline-offset: 1px; }
+
+.feed-side { display: flex; flex-direction: column; gap: 18px; position: sticky; top: 20px; }
+.side-card { background: var(--surface); border: 1px solid var(--rule); padding: 20px; }
+.side-card.muted { background: none; border-style: dashed; }
+.side-card p { font-size: 14px; line-height: 1.65; margin: 0 0 14px; }
+.side-list { list-style: none; margin: 0; padding: 0; }
+.side-list li { font-size: 13.5px; line-height: 1.6; padding-left: 16px; position: relative; margin-bottom: 11px; }
+.side-list li::before { content: ""; position: absolute; left: 0; top: 8px; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--orange); }
+
+.lesson-talk { margin-top: 40px; border-top: 2px solid var(--rule); padding-top: 24px; }
+.talk-row { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; background: none;
+  border: 0; border-bottom: 1px solid var(--rule); padding: 13px 0; cursor: pointer; }
+.talk-row:hover { background: var(--surface); }
+.talk-row strong { color: var(--navy); font-size: 14px; margin-right: 8px; }
+.talk-body { display: block; font-size: 14px; line-height: 1.6; margin-top: 3px; color: var(--text); }
+
 /* glossary */
 .glossary dl { margin: 30px 0 0; }
 .glossary dl > div { display: grid; grid-template-columns: 220px 1fr; gap: 26px; border-top: 1px solid var(--rule); padding: 18px 0; }
@@ -3773,6 +4100,9 @@ a.btn.navy { border-bottom-color: var(--navy); }
   .tracks { grid-template-columns: 1fr; gap: 10px; }
   .marking { grid-template-columns: 1fr; gap: 26px; padding: 22px; }
   .revisit { padding: 22px; }
+  .feed-wrap { grid-template-columns: 1fr; gap: 30px; }
+  .feed-side { position: static; }
+  .nav-sep { display: none; }
   .attrs > div { grid-template-columns: 1fr; gap: 2px; }
 }
 @media (prefers-reduced-motion: reduce) {
